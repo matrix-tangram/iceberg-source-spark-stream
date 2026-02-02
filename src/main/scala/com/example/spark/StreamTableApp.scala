@@ -70,10 +70,12 @@ object StreamTableApp {
     logger.info(s"Table Name: $tableName")
     logger.info(s"Key Field: ${keyField.getOrElse("None (null keys)")}")
     logger.info(s"Checkpoint Directory: $checkpointDir")
-    logger.info(s"Trigger Interval: $triggerInterval")    logger.info(s"Kafka Bootstrap Servers: $kafkaBootstrapServers")
+    logger.info(s"Trigger Interval: $triggerInterval")  
+    logger.info(s"Kafka Bootstrap Servers: $kafkaBootstrapServers")
     logger.info(s"Kafka Output Topic: $kafkaOutputTopic")
     logger.info(s"Kafka Security Protocol: $kafkaSecurityProtocol")
-    if (kafkaSaslMechanism.isDefined) logger.info(s"Kafka SASL Mechanism: ${kafkaSaslMechanism.get}")    logger.info("=".repeat(80))
+    if (kafkaSaslMechanism.isDefined) logger.info(s"Kafka SASL Mechanism: ${kafkaSaslMechanism.get}")    
+    logger.info("=".repeat(80))
 
     // Create Spark session using SparkSessionFactory
     val spark = SparkSessionFactory.create(
@@ -110,8 +112,8 @@ object StreamTableApp {
           logger.info(s"Processing batch $batchId with ${batchDf.count()} rows")
           
           // Write to console for debugging
-          logger.info(s"Batch $batchId - Console Output:")
-          batchDf.show(truncate = false)
+          // logger.info(s"Batch $batchId - Console Output:")
+          // batchDf.show(truncate = false)
           
           // Write to Kafka
           if (!batchDf.isEmpty) {
