@@ -1,0 +1,89 @@
+---
+# Deployment for Spark application in Local mode
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-stream-table-local
+  namespace: default
+  labels:
+    app: spark-stream-table-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-stream-table-local
+  template:
+    metadata:
+      labels:
+        app: spark-stream-table-local
+    spec:
+      containers:
+      - name: spark-local
+        image: spark-stream-table:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        # Spark mode configuration - LOCAL MODE
+        - name: SPARK_MODE
+          value: "local"
+        - name: PARALLELISM
+          value: "4"  # local[4] - runs with 4 threads
+        
+        # Spark resource configuration
+        - name: SPARK_DRIVER_MEMORY
+          value: "2g"
+        - name: SPARK_DRIVER_CORES
+          value: "2"
+        
+        # Application configuration
+        - name: TABLE_NAMESPACE
+          value: "raw_data"
+        - name: TABLE_NAME
+          value: "test_table"
+        - name: CHECKPOINT_DIR
+          value: "./checkpoints"
+        - name: TRIGGER_INTERVAL
+          value: "10 seconds"
+        - name: CATALOG_TYPE
+          value: "s3tables"
+        
+        # AWS credentials (use secrets in production)
+        # - name: AWS_ACCESS_KEY_ID
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: aws-credentials
+        #       key: access-key-id
+        # - name: AWS_SECRET_ACCESS_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: aws-credentials
+        #       key: secret-access-key
+        
+        ports:
+        - containerPort: 4040
+          name: spark-ui
+        
+        resources:
+          requests:
+            memory: "2.5Gi"
+            cpu: "2"
+          limits:
+            memory: "4Gi"
+            cpu: "4"
+---
+# Service to expose Spark UI
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-stream-table-local-ui
+  namespace: default
+  labels:
+    app: spark-stream-table-local
+spec:
+  type: NodePort
+  selector:
+    app: spark-stream-table-local
+  ports:
+  - port: 4040
+    targetPort: 4040
+    nodePort: 30041
+    name: spark-ui

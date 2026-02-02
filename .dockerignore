@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# Maven
+.mvn
+target/classes
+target/test-classes
+target/generated-sources
+target/generated-test-sources
+target/maven-status
+target/maven-archiver
+target/analysis
+target/bloop*
+
+# IDE
+.idea
+*.iml
+.vscode
+.settings
+.project
+.classpath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Spark
+spark-*/
+checkpoints/
+*.log
+
+# Docs
+*.md
+!README.md
+
+# Build scripts
+*.sh
+!docker-entrypoint.sh

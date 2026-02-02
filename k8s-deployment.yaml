@@ -1,0 +1,174 @@
+---
+# ServiceAccount for Spark
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spark
+  namespace: default
+---
+# Role for Spark driver to create/manage executor pods
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spark-role
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+---
+# RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: spark-role-binding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: spark
+  namespace: default
+roleRef:
+  kind: Role
+  name: spark-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# ConfigMap for application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-stream-config
+  namespace: default
+data:
+  TABLE_NAMESPACE: "raw_data"
+  TABLE_NAME: "test_table"
+  CHECKPOINT_DIR: "./checkpoints"
+  TRIGGER_INTERVAL: "10 seconds"
+  CATALOG_TYPE: "s3tables"
+---
+# Deployment for Spark application in K8s mode
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-stream-table-app
+  namespace: default
+  labels:
+    app: spark-stream-table-app
+    component: driver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-stream-table-app
+      component: driver
+  template:
+    metadata:
+      labels:
+        app: spark-stream-table-app
+        component: driver
+    spec:
+      serviceAccountName: spark
+      containers:
+      - name: spark-driver
+        image: spark-stream-table:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        # Spark mode configuration
+        - name: SPARK_MODE
+          value: "driver"
+        - name: PARALLELISM
+          value: "3"  # Number of executor pods
+        - name: K8S_IMAGE
+          value: "spark-stream-table:latest"
+        - name: K8S_NAMESPACE
+          value: "default"
+        - name: K8S_SERVICE_ACCOUNT
+          value: "spark"
+        - name: APP_NAME
+          value: "spark-stream-table-app"
+        
+        # Spark resource configuration
+        - name: SPARK_DRIVER_MEMORY
+          value: "1g"
+        - name: SPARK_EXECUTOR_MEMORY
+          value: "1g"
+        - name: SPARK_DRIVER_CORES
+          value: "1"
+        - name: SPARK_EXECUTOR_CORES
+          value: "1"
+        
+        # Application configuration from ConfigMap
+        - name: TABLE_NAMESPACE
+          valueFrom:
+            configMapKeyRef:
+              name: spark-stream-config
+              key: TABLE_NAMESPACE
+        - name: TABLE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: spark-stream-config
+              key: TABLE_NAME
+        - name: CHECKPOINT_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: spark-stream-config
+              key: CHECKPOINT_DIR
+        - name: TRIGGER_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: spark-stream-config
+              key: TRIGGER_INTERVAL
+        - name: CATALOG_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: spark-stream-config
+              key: CATALOG_TYPE
+        
+        # AWS credentials (use secrets in production)
+        # - name: AWS_ACCESS_KEY_ID
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: aws-credentials
+        #       key: access-key-id
+        # - name: AWS_SECRET_ACCESS_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: aws-credentials
+        #       key: secret-access-key
+        
+        ports:
+        - containerPort: 4040
+          name: spark-ui
+        - containerPort: 7078
+          name: driver-port
+        - containerPort: 7079
+          name: block-mgr
+        
+        resources:
+          requests:
+            memory: "1.5Gi"
+            cpu: "1"
+          limits:
+            memory: "2Gi"
+            cpu: "2"
+---
+# Service to expose Spark UI
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-stream-table-ui
+  namespace: default
+  labels:
+    app: spark-stream-table-app
+spec:
+  type: NodePort
+  selector:
+    app: spark-stream-table-app
+    component: driver
+  ports:
+  - port: 4040
+    targetPort: 4040
+    nodePort: 30040
+    name: spark-ui

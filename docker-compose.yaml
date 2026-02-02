@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # Local mode - single container with multiple threads
+  spark-local:
+    image: spark-stream-table:latest
+    container_name: spark-local
+    environment:
+      # Spark configuration
+      SPARK_MODE: local
+      PARALLELISM: 4
+      SPARK_DRIVER_MEMORY: 2g
+      SPARK_DRIVER_CORES: 2
+      
+      # Application configuration
+      TABLE_NAMESPACE: raw_data
+      TABLE_NAME: test_table
+      CHECKPOINT_DIR: /app/checkpoints
+      TRIGGER_INTERVAL: "10 seconds"
+      CATALOG_TYPE: s3tables
+      
+      # AWS credentials (replace with your credentials)
+      # AWS_ACCESS_KEY_ID: your_access_key
+      # AWS_SECRET_ACCESS_KEY: your_secret_key
+      # AWS_SESSION_TOKEN: your_session_token
+      # S3_TABLE_BUCKET_ARN: arn:aws:s3tables:region:account:bucket/bucket-name
+      
+      # Optional Kafka key field
+      # KEY_FIELD: id
+    ports:
+      - "4040:4040"  # Spark UI
+    volumes:
+      - ./checkpoints:/app/checkpoints
+    restart: unless-stopped
+    networks:
+      - spark-network
+
+networks:
+  spark-network:
+    driver: bridge
