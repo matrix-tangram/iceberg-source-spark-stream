@@ -39,7 +39,16 @@ ENV SPARK_MODE=local \
     SPARK_DRIVER_CORES=1 \
     SPARK_EXECUTOR_CORES=1 \
     APP_CLASS=com.example.spark.StreamTableApp \
-    APP_JAR=/opt/spark-app/jars/app.jar
+    APP_JAR=/opt/spark-app/jars/app.jar \
+    AWS_REGION=eu-central-1 \
+    KAFKA_BOOTSTRAP_SERVERS=bastion.ocp.tangram-soft.com:31700 \
+    KAFKA_OUTPUT_TOPIC=iceberg-output-topic \
+    KAFKA_SECURITY_PROTOCOL=PLAINTEXT \
+    TABLE_NAMESPACE=raw_data \
+    TABLE_NAME=test_table \
+    CHECKPOINT_DIR=./checkpoints \
+    TRIGGER_INTERVAL="10 seconds" \
+    CATALOG_TYPE=s3tables
 
 # Expose common Spark ports
 EXPOSE 4040 6066 7077 7078 7079 8080 8081

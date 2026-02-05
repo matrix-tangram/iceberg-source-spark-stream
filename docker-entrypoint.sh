@@ -26,6 +26,7 @@ case "${SPARK_MODE}" in
         exec ${SPARK_HOME}/bin/spark-submit \
             --master local[${PARALLELISM}] \
             --class ${APP_CLASS} \
+            --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
             --driver-memory ${SPARK_DRIVER_MEMORY} \
             --driver-cores ${SPARK_DRIVER_CORES} \
             --conf spark.ui.port=${SPARK_UI_PORT} \
