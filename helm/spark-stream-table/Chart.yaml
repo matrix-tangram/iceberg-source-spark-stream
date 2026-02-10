@@ -1,0 +1,18 @@
+apiVersion: v2
+name: spark-stream-table
+description: A Helm chart for Spark streaming application that reads from Iceberg tables and writes to Kafka
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - spark
+  - iceberg
+  - kafka
+  - streaming
+  - aws
+maintainers:
+  - name: Spark Stream Table Team
+home: https://github.com/your-org/spark-stream-table
+sources:
+  - https://github.com/your-org/spark-stream-table
+

@@ -1,0 +1,62 @@
+# Example values for using AWS S3 Tables catalog
+# Install with: helm install my-app ./helm/spark-stream-table -f examples/values-s3tables.yaml
+
+# Image configuration
+image:
+  repository: spark-stream-table
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# Spark configuration
+spark:
+  mode: driver
+  parallelism: 3
+  driver:
+    memory: "2g"
+    cores: 2
+  executor:
+    memory: "2g"
+    cores: 2
+
+# Source table configuration - S3 Tables
+table:
+  namespace: "raw_data"
+  name: "test_table"
+  catalogType: "s3tables"
+  # IMPORTANT: Replace with your actual S3 Table Bucket ARN
+  s3TableBucketArn: "arn:aws:s3tables:eu-central-1:667654397356:bucket/iceberg-warehouse1"
+
+# Kafka configuration
+kafka:
+  bootstrapServers: "bastion.ocp.tangram-soft.com:31700"
+  outputTopic: "iceberg-output-topic"
+  securityProtocol: "PLAINTEXT"
+
+# AWS configuration
+aws:
+  region: "eu-central-1"
+  # Use IRSA (IAM Roles for Service Accounts) for EKS
+  # Or configure credentials via secret
+  credentials:
+    useSecret: false
+
+# Application configuration
+app:
+  checkpointDir: "./checkpoints"
+  triggerInterval: "10 seconds"
+
+# Service configuration
+service:
+  type: NodePort
+  port: 4040
+  nodePort: 30040
+
+# Resources
+resources:
+  limits:
+    cpu: 3
+    memory: 3Gi
+  requests:
+    cpu: 2
+    memory: 2.5Gi
+

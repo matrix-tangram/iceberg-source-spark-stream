@@ -1,0 +1,95 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
+  $ helm get all {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+=============================================================================
+SPARK STREAM TABLE APPLICATION
+=============================================================================
+
+1. Get the application status:
+
+   kubectl get deployment {{ include "spark-stream-table.fullname" . }} -n {{ .Release.Namespace }}
+
+2. View the application logs:
+
+   kubectl logs -f deployment/{{ include "spark-stream-table.fullname" . }} -n {{ .Release.Namespace }}
+
+3. Access the Spark UI:
+
+{{- if eq .Values.service.type "NodePort" }}
+   export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "spark-stream-table.fullname" . }}-ui)
+   export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+   echo "Spark UI URL: http://$NODE_IP:$NODE_PORT"
+{{- else if eq .Values.service.type "LoadBalancer" }}
+   NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+   You can watch the status by running:
+   
+   kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "spark-stream-table.fullname" . }}-ui
+   
+   export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "spark-stream-table.fullname" . }}-ui --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+   echo "Spark UI URL: http://$SERVICE_IP:{{ .Values.service.port }}"
+{{- else if eq .Values.service.type "ClusterIP" }}
+   kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "spark-stream-table.fullname" . }}-ui {{ .Values.service.port }}:{{ .Values.service.port }}
+   echo "Spark UI URL: http://127.0.0.1:{{ .Values.service.port }}"
+{{- end }}
+
+4. Configuration Summary:
+
+   - Spark Mode: {{ .Values.spark.mode }}
+   - Parallelism: {{ .Values.spark.parallelism }}
+   - Source Table: {{ .Values.table.namespace }}.{{ .Values.table.name }}
+   - Catalog Type: {{ .Values.table.catalogType }}
+   - Kafka Bootstrap Servers: {{ .Values.kafka.bootstrapServers }}
+   - Kafka Output Topic: {{ .Values.kafka.outputTopic }}
+   - Trigger Interval: {{ .Values.app.triggerInterval }}
+
+5. Monitor executor pods (if using Kubernetes mode):
+
+   kubectl get pods -n {{ .Values.kubernetes.namespace }} -l app={{ .Values.spark.appName }},component=executor
+
+6. Troubleshooting:
+
+   - Check driver logs:
+     kubectl logs -f deployment/{{ include "spark-stream-table.fullname" . }} -n {{ .Release.Namespace }}
+   
+   - Check executor logs:
+     kubectl logs -l app={{ .Values.spark.appName }},component=executor -n {{ .Values.kubernetes.namespace }}
+   
+   - Describe the deployment:
+     kubectl describe deployment {{ include "spark-stream-table.fullname" . }} -n {{ .Release.Namespace }}
+
+{{- if not .Values.aws.credentials.useSecret }}
+
+WARNING: AWS credentials are not configured via secret.
+Make sure your pods have access to AWS credentials through:
+- IAM Roles for Service Accounts (IRSA) - recommended for EKS
+- EC2 instance profiles
+- Or configure aws.credentials.useSecret=true and create the secret
+
+{{- end }}
+
+{{- if eq .Values.table.catalogType "s3tables" }}
+{{- if not .Values.table.s3TableBucketArn }}
+
+WARNING: S3_TABLE_BUCKET_ARN is not set.
+Please set table.s3TableBucketArn in your values.yaml or via --set flag.
+
+{{- end }}
+{{- else if eq .Values.table.catalogType "glue" }}
+{{- if not .Values.table.s3Warehouse }}
+
+WARNING: S3_WAREHOUSE is not set.
+Please set table.s3Warehouse in your values.yaml or via --set flag.
+
+{{- end }}
+{{- end }}
+
+=============================================================================
+For more information, visit: {{ .Chart.Home }}
+=============================================================================
+

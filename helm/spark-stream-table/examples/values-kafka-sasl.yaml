@@ -1,0 +1,61 @@
+# Example values for using Kafka with SASL authentication
+# Install with: helm install my-app ./helm/spark-stream-table -f examples/values-kafka-sasl.yaml
+
+# Image configuration
+image:
+  repository: spark-stream-table
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# Spark configuration
+spark:
+  mode: driver
+  parallelism: 2
+  driver:
+    memory: "1g"
+    cores: 1
+  executor:
+    memory: "1g"
+    cores: 1
+
+# Source table configuration
+table:
+  namespace: "raw_data"
+  name: "test_table"
+  catalogType: "s3tables"
+  s3TableBucketArn: "arn:aws:s3tables:eu-central-1:123456789012:bucket/my-bucket"
+
+# Kafka configuration with SASL
+kafka:
+  bootstrapServers: "kafka.example.com:9093"
+  outputTopic: "iceberg-output-topic"
+  securityProtocol: "SASL_SSL"
+  saslMechanism: "SCRAM-SHA-256"
+  # IMPORTANT: Replace with your actual credentials
+  saslJaasConfig: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"myuser\" password=\"mypassword\";"
+
+# AWS configuration
+aws:
+  region: "eu-central-1"
+  credentials:
+    useSecret: false
+
+# Application configuration
+app:
+  checkpointDir: "./checkpoints"
+  triggerInterval: "10 seconds"
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 4040
+
+# Resources
+resources:
+  limits:
+    cpu: 2
+    memory: 2Gi
+  requests:
+    cpu: 1
+    memory: 1.5Gi
+

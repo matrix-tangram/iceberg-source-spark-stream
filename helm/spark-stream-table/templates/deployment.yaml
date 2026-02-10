@@ -1,0 +1,207 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "spark-stream-table.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spark-stream-table.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "spark-stream-table.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- include "spark-stream-table.configMapChecksum" . | nindent 8 }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "spark-stream-table.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "spark-stream-table.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: spark-driver
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: {{ include "spark-stream-table.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+        # Spark mode configuration
+        - name: SPARK_MODE
+          value: {{ .Values.spark.mode | quote }}
+        - name: PARALLELISM
+          value: {{ .Values.spark.parallelism | quote }}
+        - name: K8S_IMAGE
+          value: {{ include "spark-stream-table.image" . | quote }}
+        - name: K8S_NAMESPACE
+          value: {{ .Values.kubernetes.namespace | quote }}
+        - name: K8S_SERVICE_ACCOUNT
+          value: {{ include "spark-stream-table.serviceAccountName" . | quote }}
+        - name: APP_NAME
+          value: {{ .Values.spark.appName | quote }}
+        - name: APP_CLASS
+          value: {{ .Values.spark.appClass | quote }}
+        - name: APP_JAR
+          value: {{ .Values.spark.appJar | quote }}
+        
+        # Spark resource configuration
+        - name: SPARK_DRIVER_MEMORY
+          value: {{ .Values.spark.driver.memory | quote }}
+        - name: SPARK_EXECUTOR_MEMORY
+          value: {{ .Values.spark.executor.memory | quote }}
+        - name: SPARK_DRIVER_CORES
+          value: {{ .Values.spark.driver.cores | quote }}
+        - name: SPARK_EXECUTOR_CORES
+          value: {{ .Values.spark.executor.cores | quote }}
+        - name: SPARK_DRIVER_PORT
+          value: {{ .Values.spark.driver.port | quote }}
+        - name: SPARK_DRIVER_BLOCK_MANAGER_PORT
+          value: {{ .Values.spark.driver.blockManagerPort | quote }}
+        - name: SPARK_UI_PORT
+          value: {{ .Values.spark.ui.port | quote }}
+        
+        # Application configuration from ConfigMap
+        - name: TABLE_NAMESPACE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: TABLE_NAMESPACE
+        - name: TABLE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: TABLE_NAME
+        - name: CATALOG_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: CATALOG_TYPE
+        {{- if eq .Values.table.catalogType "s3tables" }}
+        {{- if .Values.table.s3TableBucketArn }}
+        - name: S3_TABLE_BUCKET_ARN
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: S3_TABLE_BUCKET_ARN
+        {{- end }}
+        {{- else if eq .Values.table.catalogType "glue" }}
+        {{- if .Values.table.s3Warehouse }}
+        - name: S3_WAREHOUSE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: S3_WAREHOUSE
+        {{- end }}
+        {{- end }}
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: KAFKA_BOOTSTRAP_SERVERS
+        - name: KAFKA_OUTPUT_TOPIC
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: KAFKA_OUTPUT_TOPIC
+        - name: KAFKA_SECURITY_PROTOCOL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: KAFKA_SECURITY_PROTOCOL
+        {{- if .Values.kafka.saslMechanism }}
+        - name: KAFKA_SASL_MECHANISM
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: KAFKA_SASL_MECHANISM
+        {{- end }}
+        {{- if .Values.kafka.saslJaasConfig }}
+        - name: KAFKA_SASL_JAAS_CONFIG
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: KAFKA_SASL_JAAS_CONFIG
+        {{- end }}
+        - name: AWS_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: AWS_REGION
+        - name: CHECKPOINT_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: CHECKPOINT_DIR
+        - name: TRIGGER_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "spark-stream-table.configMapName" . }}
+              key: TRIGGER_INTERVAL
+
+        # AWS credentials (optional - from secret)
+        {{- if .Values.aws.credentials.useSecret }}
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.aws.credentials.secretName }}
+              key: {{ .Values.aws.credentials.accessKeyIdKey }}
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.aws.credentials.secretName }}
+              key: {{ .Values.aws.credentials.secretAccessKeyKey }}
+        {{- if .Values.aws.credentials.sessionTokenKey }}
+        - name: AWS_SESSION_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.aws.credentials.secretName }}
+              key: {{ .Values.aws.credentials.sessionTokenKey }}
+        {{- end }}
+        {{- end }}
+
+        # Additional Spark submit options
+        {{- if .Values.sparkSubmitOpts }}
+        - name: SPARK_SUBMIT_OPTS
+          value: {{ .Values.sparkSubmitOpts | quote }}
+        {{- end }}
+
+        # Additional environment variables
+        {{- with .Values.extraEnv }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+
+        ports:
+        - containerPort: {{ .Values.spark.ui.port }}
+          name: spark-ui
+          protocol: TCP
+        - containerPort: {{ .Values.spark.driver.port }}
+          name: driver-port
+          protocol: TCP
+        - containerPort: {{ .Values.spark.driver.blockManagerPort }}
+          name: block-mgr
+          protocol: TCP
+
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+

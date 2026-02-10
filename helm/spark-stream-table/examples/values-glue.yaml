@@ -1,0 +1,60 @@
+# Example values for using AWS Glue Data Catalog
+# Install with: helm install my-app ./helm/spark-stream-table -f examples/values-glue.yaml
+
+# Image configuration
+image:
+  repository: spark-stream-table
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# Spark configuration
+spark:
+  mode: driver
+  parallelism: 3
+  driver:
+    memory: "2g"
+    cores: 2
+  executor:
+    memory: "2g"
+    cores: 2
+
+# Source table configuration - Glue Catalog
+table:
+  namespace: "my_database"
+  name: "my_table"
+  catalogType: "glue"
+  # IMPORTANT: Replace with your actual S3 warehouse path
+  s3Warehouse: "s3a://my-bucket/warehouse"
+
+# Kafka configuration
+kafka:
+  bootstrapServers: "kafka.example.com:9092"
+  outputTopic: "iceberg-output-topic"
+  securityProtocol: "PLAINTEXT"
+
+# AWS configuration
+aws:
+  region: "us-east-1"
+  credentials:
+    useSecret: false
+
+# Application configuration
+app:
+  checkpointDir: "./checkpoints"
+  triggerInterval: "10 seconds"
+
+# Service configuration
+service:
+  type: NodePort
+  port: 4040
+  nodePort: 30040
+
+# Resources
+resources:
+  limits:
+    cpu: 3
+    memory: 3Gi
+  requests:
+    cpu: 2
+    memory: 2.5Gi
+

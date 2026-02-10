@@ -1,0 +1,166 @@
+# Default values for spark-stream-table.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Number of replicas for the deployment
+replicaCount: 1
+
+# Image configuration
+image:
+  repository: spark-stream-table
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# ServiceAccount configuration
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: "spark"
+
+# RBAC configuration
+rbac:
+  # Specifies whether RBAC resources should be created
+  create: true
+
+# Spark application configuration
+spark:
+  # Spark mode: driver (for Kubernetes), local, submit, master, worker
+  mode: driver
+  
+  # Application details
+  appName: "spark-stream-table-app"
+  appClass: "com.example.spark.StreamTableApp"
+  appJar: "/opt/spark-app/jars/app.jar"
+  
+  # Parallelism / Executor count
+  parallelism: 2
+  
+  # Driver configuration
+  driver:
+    memory: "1g"
+    cores: 1
+    port: 7078
+    blockManagerPort: 7079
+  
+  # Executor configuration
+  executor:
+    memory: "1g"
+    cores: 1
+  
+  # Spark UI configuration
+  ui:
+    port: 4040
+
+# Source table configuration
+table:
+  # Table namespace (database)
+  namespace: "raw_data"
+  # Table name
+  name: "test_table"
+  # Catalog type: s3tables or glue
+  catalogType: "s3tables"
+  # S3 Table Bucket ARN (required for s3tables catalog type)
+  s3TableBucketArn: ""
+  # S3 Warehouse path (required for glue catalog type)
+  s3Warehouse: ""
+
+# Kafka configuration
+kafka:
+  # Kafka bootstrap servers
+  bootstrapServers: "bastion.ocp.tangram-soft.com:31700"
+  # Output topic name
+  outputTopic: "iceberg-output-topic"
+  # Security protocol: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL
+  securityProtocol: "PLAINTEXT"
+  # SASL mechanism (optional): PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
+  saslMechanism: ""
+  # SASL JAAS config (optional)
+  saslJaasConfig: ""
+
+# AWS configuration
+aws:
+  # AWS region
+  region: "eu-central-1"
+  # AWS credentials (use secrets in production)
+  # These should be provided via external secrets or IRSA
+  credentials:
+    # Set to true to use AWS credentials from a secret
+    useSecret: false
+    # Name of the secret containing AWS credentials
+    secretName: "aws-credentials"
+    # Keys in the secret
+    accessKeyIdKey: "access-key-id"
+    secretAccessKeyKey: "secret-access-key"
+    sessionTokenKey: "session-token"
+
+# Application configuration
+app:
+  # Checkpoint directory for Spark streaming
+  checkpointDir: "./checkpoints"
+  # Trigger interval for micro-batches
+  triggerInterval: "10 seconds"
+
+# Kubernetes-specific configuration
+kubernetes:
+  # Namespace where executor pods will be created
+  namespace: "default"
+
+# Service configuration for Spark UI
+service:
+  type: NodePort
+  port: 4040
+  targetPort: 4040
+  nodePort: 30040
+  annotations: {}
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 2
+    memory: 2Gi
+  requests:
+    cpu: 1
+    memory: 1.5Gi
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod security context
+podSecurityContext: {}
+  # fsGroup: 2000
+
+# Container security context
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+# Additional environment variables
+extraEnv: []
+  # - name: CUSTOM_VAR
+  #   value: "custom_value"
+
+# Additional Spark submit options
+sparkSubmitOpts: ""
+

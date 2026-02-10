@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "spark-stream-table.configMapName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spark-stream-table.labels" . | nindent 4 }}
+data:
+  # Table configuration
+  TABLE_NAMESPACE: {{ .Values.table.namespace | quote }}
+  TABLE_NAME: {{ .Values.table.name | quote }}
+  CATALOG_TYPE: {{ .Values.table.catalogType | quote }}
+  {{- if eq .Values.table.catalogType "s3tables" }}
+  {{- if .Values.table.s3TableBucketArn }}
+  S3_TABLE_BUCKET_ARN: {{ .Values.table.s3TableBucketArn | quote }}
+  {{- end }}
+  {{- else if eq .Values.table.catalogType "glue" }}
+  {{- if .Values.table.s3Warehouse }}
+  S3_WAREHOUSE: {{ .Values.table.s3Warehouse | quote }}
+  {{- end }}
+  {{- end }}
+  
+  # Kafka configuration
+  KAFKA_BOOTSTRAP_SERVERS: {{ .Values.kafka.bootstrapServers | quote }}
+  KAFKA_OUTPUT_TOPIC: {{ .Values.kafka.outputTopic | quote }}
+  KAFKA_SECURITY_PROTOCOL: {{ .Values.kafka.securityProtocol | quote }}
+  {{- if .Values.kafka.saslMechanism }}
+  KAFKA_SASL_MECHANISM: {{ .Values.kafka.saslMechanism | quote }}
+  {{- end }}
+  {{- if .Values.kafka.saslJaasConfig }}
+  KAFKA_SASL_JAAS_CONFIG: {{ .Values.kafka.saslJaasConfig | quote }}
+  {{- end }}
+  
+  # AWS configuration
+  AWS_REGION: {{ .Values.aws.region | quote }}
+  
+  # Application configuration
+  CHECKPOINT_DIR: {{ .Values.app.checkpointDir | quote }}
+  TRIGGER_INTERVAL: {{ .Values.app.triggerInterval | quote }}
+
