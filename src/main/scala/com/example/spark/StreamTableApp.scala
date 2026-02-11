@@ -7,9 +7,6 @@ import org.slf4j.LoggerFactory
 import java.nio.file.{Files, Paths}
 import java.time.Instant
 import scala.util.Try
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import scala.collection.JavaConverters._
 
 /**
  * Spark Structured Streaming application to read incremental changes from an Iceberg table.
@@ -37,7 +34,8 @@ import scala.collection.JavaConverters._
  * - KAFKA_SASL_MECHANISM: SASL mechanism (optional, for authentication)
  * - KAFKA_SASL_JAAS_CONFIG: JAAS configuration (optional, for authentication)
  * - KAFKA_KEY_SERIALIZER: Key serializer class (default: "org.apache.kafka.common.serialization.StringSerializer")
- * - KAFKA_VALUE_SERIALIZER: Value serializer class (default: "org.apache.kafka.common.serialization.StringSerializer")
+ * - KAFKA_VALUE_SERIALIZER: Value serializer class (default: "io.confluent.kafka.serializers.json.KafkaJsonSerializer")
+ * - KAFKA_SERIALIZER_JSON_SCHEMAS_ENABLED: Enable inline JSON schemas (default: "false")
  * - SCHEMA_REGISTRY_URL: Schema Registry URL (optional, for Confluent Schema Registry integration)
  * - SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO: Schema Registry auth in format "username:password" (optional)
  * - AUTO_REGISTER_SCHEMAS: Auto-register schemas with Schema Registry (default: "true")
@@ -271,39 +269,18 @@ object StreamTableApp {
     val broadcastSaslMechanism = df.sparkSession.sparkContext.broadcast(saslMechanism)
     val broadcastSaslJaasConfig = df.sparkSession.sparkContext.broadcast(saslJaasConfig)
 
-    // Determine if we need to convert to JSON string (for StringSerializer)
-    val useStringSerializer = serializerConfig.valueSerializerClass.contains("StringSerializer")
-
     // Process each partition
     df.foreachPartition { partition: Iterator[Row] =>
       if (partition.nonEmpty) {
-        // Create ObjectMapper for JSON conversion if needed
-        val objectMapper = if (useStringSerializer) {
-          val mapper = new ObjectMapper()
-          mapper.registerModule(DefaultScalaModule)
-          Some(mapper)
-        } else {
-          None
-        }
-
         // Create producer for this partition
-        val producer = if (useStringSerializer) {
-          KafkaProducerHelper.createProducer[String, String](
-            broadcastBootstrapServers.value,
-            broadcastSerializerConfig.value,
-            broadcastSecurityProtocol.value,
-            broadcastSaslMechanism.value,
-            broadcastSaslJaasConfig.value
-          )
-        } else {
-          KafkaProducerHelper.createProducer[String, Any](
-            broadcastBootstrapServers.value,
-            broadcastSerializerConfig.value,
-            broadcastSecurityProtocol.value,
-            broadcastSaslMechanism.value,
-            broadcastSaslJaasConfig.value
-          )
-        }
+        // KafkaJsonSerializer can handle Map[String, Any] objects directly
+        val producer = KafkaProducerHelper.createProducer[String, Any](
+          broadcastBootstrapServers.value,
+          broadcastSerializerConfig.value,
+          broadcastSecurityProtocol.value,
+          broadcastSaslMechanism.value,
+          broadcastSaslJaasConfig.value
+        )
 
         try {
           partition.foreach { row =>
@@ -315,27 +292,16 @@ object StreamTableApp {
               case _ => null
             }
 
-            // Convert row to appropriate format
-            if (useStringSerializer) {
-              // Convert to JSON string for StringSerializer
-              val rowMap = rowToMap(row)
-              val jsonString = objectMapper.get.writeValueAsString(rowMap.asJava)
-              KafkaProducerHelper.sendRecord(
-                producer.asInstanceOf[org.apache.kafka.clients.producer.KafkaProducer[String, String]],
-                broadcastTopic.value,
-                key,
-                jsonString
-              )
-            } else {
-              // Send as Map for other serializers (e.g., JsonSchemaSerializer)
-              val value = rowToMap(row)
-              KafkaProducerHelper.sendRecord(
-                producer.asInstanceOf[org.apache.kafka.clients.producer.KafkaProducer[String, Any]],
-                broadcastTopic.value,
-                key,
-                value
-              )
-            }
+            // Convert row to Map - serializer will handle JSON conversion
+            val value = rowToMap(row)
+
+            // Send to Kafka - serializer handles the conversion
+            KafkaProducerHelper.sendRecord(
+              producer,
+              broadcastTopic.value,
+              key,
+              value
+            )
           }
         } finally {
           producer.close()

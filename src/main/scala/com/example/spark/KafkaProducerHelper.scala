@@ -109,35 +109,41 @@ object KafkaProducerHelper {
       "KAFKA_KEY_SERIALIZER",
       "org.apache.kafka.common.serialization.StringSerializer"
     )
-    
+
     val valueSerializer = envVars.getOrElse(
       "KAFKA_VALUE_SERIALIZER",
-      "org.apache.kafka.common.serialization.StringSerializer"
+      "io.confluent.kafka.serializers.json.KafkaJsonSerializer"
     )
-    
+
     // Build additional configs
     var additionalConfigs = Map.empty[String, String]
-    
+
     // Add Schema Registry configuration if URL is provided
     schemaRegistryUrl.foreach { url =>
       additionalConfigs += ("schema.registry.url" -> url)
       additionalConfigs += ("auto.register.schemas" -> autoRegisterSchemas.toString)
-      
+
       schemaRegistryAuth.foreach { auth =>
         additionalConfigs += ("basic.auth.credentials.source" -> "USER_INFO")
         additionalConfigs += ("basic.auth.user.info" -> auth)
       }
     }
-    
+
+    // Add inline JSON schema support if enabled
+    val jsonSchemasEnabled = envVars.getOrElse("KAFKA_SERIALIZER_JSON_SCHEMAS_ENABLED", "false")
+    if (jsonSchemasEnabled.toLowerCase == "true") {
+      additionalConfigs += ("json.schemas.enable" -> "true")
+    }
+
     // Parse additional serializer-specific configs from environment
     val configPrefix = "KAFKA_SERIALIZER_"
     envVars.foreach { case (key, value) =>
-      if (key.startsWith(configPrefix)) {
+      if (key.startsWith(configPrefix) && key != "KAFKA_SERIALIZER_JSON_SCHEMAS_ENABLED") {
         val configKey = key.substring(configPrefix.length).toLowerCase.replace('_', '.')
         additionalConfigs += (configKey -> value)
       }
     }
-    
+
     SerializerConfig(keySerializer, valueSerializer, additionalConfigs)
   }
 }
