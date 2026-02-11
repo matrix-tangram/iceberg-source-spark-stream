@@ -1,6 +1,6 @@
 package com.example.spark
 
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.{OutputMode, Trigger}
 import org.slf4j.LoggerFactory
@@ -10,14 +10,15 @@ import scala.util.Try
 
 /**
  * Spark Structured Streaming application to read incremental changes from an Iceberg table.
- * 
+ *
  * Features:
  * - Reads incremental changes from Iceberg table using Spark Structured Streaming
  * - On first run, reads the entire table
  * - Stores checkpoint data for subsequent restarts
  * - Transforms data into Kafka-compatible format (key-value pairs)
- * - Outputs results to console (can be extended to write to Kafka)
- * 
+ * - Supports configurable Kafka serializers including Confluent Schema Registry
+ * - Outputs results to Kafka with automatic schema registration
+ *
  * Configuration via environment variables:
  * - CATALOG_TYPE: "s3tables" or "glue" (default: "s3tables")
  * - S3_TABLE_BUCKET_ARN: ARN of the S3 table bucket (for s3tables)
@@ -32,6 +33,12 @@ import scala.util.Try
  * - KAFKA_SECURITY_PROTOCOL: Security protocol (default: "PLAINTEXT")
  * - KAFKA_SASL_MECHANISM: SASL mechanism (optional, for authentication)
  * - KAFKA_SASL_JAAS_CONFIG: JAAS configuration (optional, for authentication)
+ * - KAFKA_KEY_SERIALIZER: Key serializer class (default: "org.apache.kafka.common.serialization.StringSerializer")
+ * - KAFKA_VALUE_SERIALIZER: Value serializer class (default: "org.apache.kafka.common.serialization.StringSerializer")
+ * - SCHEMA_REGISTRY_URL: Schema Registry URL (optional, for Confluent Schema Registry integration)
+ * - SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO: Schema Registry auth in format "username:password" (optional)
+ * - AUTO_REGISTER_SCHEMAS: Auto-register schemas with Schema Registry (default: "true")
+ * - KAFKA_SERIALIZER_*: Additional serializer-specific configs (e.g., KAFKA_SERIALIZER_json_add_type_info=true)
  * - AWS_ACCESS_KEY_ID: AWS access key (optional)
  * - AWS_SECRET_ACCESS_KEY: AWS secret key (optional)
  * - AWS_SESSION_TOKEN: AWS session token (optional)
@@ -47,13 +54,26 @@ object StreamTableApp {
     val keyField = sys.env.get("KEY_FIELD") // Optional key field for Kafka output
     val checkpointBase = sys.env.getOrElse("CHECKPOINT_DIR", "./checkpoints")
     val triggerInterval = sys.env.getOrElse("TRIGGER_INTERVAL", "10 seconds")
-    
+
     // Kafka configuration
     val kafkaBootstrapServers = sys.env.getOrElse("KAFKA_BOOTSTRAP_SERVERS", "bastion.ocp.tangram-soft.com:31700")
     val kafkaOutputTopic = sys.env.getOrElse("KAFKA_OUTPUT_TOPIC", "iceberg-output-topic")
     val kafkaSecurityProtocol = sys.env.getOrElse("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT")
     val kafkaSaslMechanism = sys.env.get("KAFKA_SASL_MECHANISM")
     val kafkaSaslJaasConfig = sys.env.get("KAFKA_SASL_JAAS_CONFIG")
+
+    // Schema Registry configuration
+    val schemaRegistryUrl = sys.env.get("SCHEMA_REGISTRY_URL")
+    val schemaRegistryAuth = sys.env.get("SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO")
+    val autoRegisterSchemas = sys.env.getOrElse("AUTO_REGISTER_SCHEMAS", "true").toBoolean
+
+    // Serializer configuration
+    val serializerConfig = KafkaProducerHelper.parseSerializerConfig(
+      sys.env.toMap,
+      schemaRegistryUrl,
+      schemaRegistryAuth,
+      autoRegisterSchemas
+    )
     
     // Build checkpoint directory - ensure it's on S3 if using S3 Tables
     val checkpointDir = if (checkpointBase.startsWith("s3://") || checkpointBase.startsWith("s3a://")) {
@@ -70,11 +90,15 @@ object StreamTableApp {
     logger.info(s"Table Name: $tableName")
     logger.info(s"Key Field: ${keyField.getOrElse("None (null keys)")}")
     logger.info(s"Checkpoint Directory: $checkpointDir")
-    logger.info(s"Trigger Interval: $triggerInterval")  
+    logger.info(s"Trigger Interval: $triggerInterval")
     logger.info(s"Kafka Bootstrap Servers: $kafkaBootstrapServers")
     logger.info(s"Kafka Output Topic: $kafkaOutputTopic")
     logger.info(s"Kafka Security Protocol: $kafkaSecurityProtocol")
-    if (kafkaSaslMechanism.isDefined) logger.info(s"Kafka SASL Mechanism: ${kafkaSaslMechanism.get}")    
+    if (kafkaSaslMechanism.isDefined) logger.info(s"Kafka SASL Mechanism: ${kafkaSaslMechanism.get}")
+    logger.info(s"Key Serializer: ${serializerConfig.keySerializerClass}")
+    logger.info(s"Value Serializer: ${serializerConfig.valueSerializerClass}")
+    schemaRegistryUrl.foreach(url => logger.info(s"Schema Registry URL: $url"))
+    logger.info(s"Auto Register Schemas: $autoRegisterSchemas")
     logger.info("=".repeat(80))
 
     // Create Spark session using SparkSessionFactory
@@ -95,33 +119,41 @@ object StreamTableApp {
 
       // Read from Iceberg table as a stream
       val streamDf = readIcebergStream(spark, fullTablePath)
-      
+
       logger.info("Stream DataFrame created with schema:")
       streamDf.printSchema()
 
-      // Transform to Kafka-compatible format (key-value)
-      val kafkaFormatDf = transformToKafkaFormat(streamDf, keyField)
-      
-      logger.info("Transformed DataFrame schema (Kafka format):")
-      kafkaFormatDf.printSchema()
+      // Register schema with Schema Registry if configured
+      schemaRegistryUrl.foreach { url =>
+        val schemaRegistryClient = SchemaRegistryHelper.createSchemaRegistryClient(url, schemaRegistryAuth)
+        val jsonSchema = SchemaRegistryHelper.inferJsonSchemaFromDataFrame(streamDf)
+        val subject = s"$kafkaOutputTopic-value"
 
-      // Start streaming query - output to both console and Kafka using foreachBatch
-      val query = kafkaFormatDf.writeStream
+        if (autoRegisterSchemas) {
+          try {
+            SchemaRegistryHelper.registerSchema(schemaRegistryClient, subject, jsonSchema)
+          } catch {
+            case e: Exception =>
+              logger.warn(s"Failed to register schema: ${e.getMessage}. Will rely on auto-registration during serialization.")
+          }
+        }
+      }
+
+      // Start streaming query - output to Kafka using foreachBatch
+      val query = streamDf.writeStream
         .outputMode(OutputMode.Append())
         .foreachBatch { (batchDf: DataFrame, batchId: Long) =>
           logger.info(s"Processing batch $batchId with ${batchDf.count()} rows")
-          
-          // Write to console for debugging
-          // logger.info(s"Batch $batchId - Console Output:")
-          // batchDf.show(truncate = false)
-          
+
           // Write to Kafka
           if (!batchDf.isEmpty) {
             logger.info(s"Batch $batchId - Writing to Kafka topic: $kafkaOutputTopic")
-            writeToKafka(
+            writeToKafkaWithSerializers(
               batchDf,
               kafkaBootstrapServers,
               kafkaOutputTopic,
+              keyField,
+              serializerConfig,
               kafkaSecurityProtocol,
               kafkaSaslMechanism,
               kafkaSaslJaasConfig
@@ -189,86 +221,92 @@ object StreamTableApp {
   }
 
   /**
-   * Transforms a DataFrame into Kafka-compatible format with key and value columns.
-   * 
-   * Output schema:
-   * - key: Binary (extracted from specified field, or null if not specified)
-   * - value: Binary (JSON representation of all fields)
-   * 
-   * @param df Input DataFrame
-   * @param keyFieldOpt Optional field name to use as key
-   * @return Transformed DataFrame with key and value columns
+   * Converts a Spark Row to a Map for JSON serialization.
+   *
+   * @param row Spark Row
+   * @return Map representation of the row
    */
-  private def transformToKafkaFormat(df: DataFrame, keyFieldOpt: Option[String]): DataFrame = {
-    logger.info("Transforming DataFrame to Kafka format (key-value pairs)")
-    
-    // Create value: Convert entire row to JSON
-    val dfWithValue = df.withColumn("value", to_json(struct(df.columns.map(col): _*)))
-    
-    // Create key: Use specified field or null
-    val dfWithKeyValue = keyFieldOpt match {
-      case Some(keyField) if df.columns.contains(keyField) =>
-        logger.info(s"Using field '$keyField' as Kafka key")
-        dfWithValue.withColumn("key", col(keyField).cast("string"))
-      
-      case Some(keyField) =>
-        logger.warn(s"Specified key field '$keyField' not found in DataFrame. Using null keys.")
-        logger.warn(s"Available fields: ${df.columns.mkString(", ")}")
-        dfWithValue.withColumn("key", lit(null).cast("string"))
-      
-      case None =>
-        logger.info("No key field specified. Using null keys.")
-        dfWithValue.withColumn("key", lit(null).cast("string"))
-    }
-    
-    // Select only key and value columns (standard Kafka format)
-    val result = dfWithKeyValue.select("key", "value")
-    
-    logger.info("DataFrame successfully transformed to Kafka format")
-    result
+  private def rowToMap(row: Row): Map[String, Any] = {
+    row.schema.fields.map { field =>
+      val value = row.getAs[Any](field.name)
+      field.name -> (if (value == null) null else value)
+    }.toMap
   }
 
   /**
-   * Writes a DataFrame to Kafka topic.
-   * 
-   * @param df DataFrame with key and value columns
+   * Writes a DataFrame to Kafka topic using configurable serializers.
+   * Uses foreachPartition to leverage native Kafka producers with proper serializers.
+   *
+   * @param df DataFrame to write
    * @param bootstrapServers Kafka bootstrap servers
    * @param topic Kafka topic to write to
+   * @param keyFieldOpt Optional key field name
+   * @param serializerConfig Serializer configuration
    * @param securityProtocol Security protocol (PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL)
    * @param saslMechanism Optional SASL mechanism
    * @param saslJaasConfig Optional JAAS configuration
    */
-  private def writeToKafka(
+  private def writeToKafkaWithSerializers(
       df: DataFrame,
       bootstrapServers: String,
       topic: String,
+      keyFieldOpt: Option[String],
+      serializerConfig: KafkaProducerHelper.SerializerConfig,
       securityProtocol: String,
       saslMechanism: Option[String],
       saslJaasConfig: Option[String]
   ): Unit = {
-    logger.info(s"Writing ${df.count()} rows to Kafka topic: $topic")
-    
-    // Build Kafka options
-    var kafkaOptions = Map(
-      "kafka.bootstrap.servers" -> bootstrapServers,
-      "topic" -> topic,
-      "kafka.security.protocol" -> securityProtocol
-    )
-    
-    // Add SASL configuration if provided
-    if (saslMechanism.isDefined) {
-      kafkaOptions = kafkaOptions + ("kafka.sasl.mechanism" -> saslMechanism.get)
+    val rowCount = df.count()
+    logger.info(s"Writing $rowCount rows to Kafka topic: $topic")
+
+    // Broadcast configuration to executors
+    val broadcastBootstrapServers = df.sparkSession.sparkContext.broadcast(bootstrapServers)
+    val broadcastTopic = df.sparkSession.sparkContext.broadcast(topic)
+    val broadcastKeyField = df.sparkSession.sparkContext.broadcast(keyFieldOpt)
+    val broadcastSerializerConfig = df.sparkSession.sparkContext.broadcast(serializerConfig)
+    val broadcastSecurityProtocol = df.sparkSession.sparkContext.broadcast(securityProtocol)
+    val broadcastSaslMechanism = df.sparkSession.sparkContext.broadcast(saslMechanism)
+    val broadcastSaslJaasConfig = df.sparkSession.sparkContext.broadcast(saslJaasConfig)
+
+    // Process each partition
+    df.foreachPartition { partition: Iterator[Row] =>
+      if (partition.nonEmpty) {
+        // Create producer for this partition
+        val producer = KafkaProducerHelper.createProducer[String, Any](
+          broadcastBootstrapServers.value,
+          broadcastSerializerConfig.value,
+          broadcastSecurityProtocol.value,
+          broadcastSaslMechanism.value,
+          broadcastSaslJaasConfig.value
+        )
+
+        try {
+          partition.foreach { row =>
+            // Extract key
+            val key = broadcastKeyField.value match {
+              case Some(keyField) if row.schema.fieldNames.contains(keyField) =>
+                val keyValue = row.getAs[Any](keyField)
+                if (keyValue != null) keyValue.toString else null
+              case _ => null
+            }
+
+            // Convert row to Map for serialization
+            val value = rowToMap(row)
+
+            // Send to Kafka
+            KafkaProducerHelper.sendRecord(
+              producer,
+              broadcastTopic.value,
+              key,
+              value
+            )
+          }
+        } finally {
+          producer.close()
+        }
+      }
     }
-    if (saslJaasConfig.isDefined) {
-      kafkaOptions = kafkaOptions + ("kafka.sasl.jaas.config" -> saslJaasConfig.get)
-    }
-    
-    // Write to Kafka
-    df.write
-      .format("kafka")
-      .options(kafkaOptions)
-      .save()
-    
-    logger.info(s"Successfully wrote batch to Kafka topic: $topic")
+
+    logger.info(s"Successfully wrote $rowCount rows to Kafka topic: $topic")
   }
 }
