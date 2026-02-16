@@ -35,19 +35,6 @@ roleRef:
   name: spark-role
   apiGroup: rbac.authorization.k8s.io
 ---
-# ConfigMap for application configuration
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: spark-stream-config
-  namespace: default
-data:
-  TABLE_NAMESPACE: "raw_data"
-  TABLE_NAME: "test_table"
-  CHECKPOINT_DIR: "./checkpoints"
-  TRIGGER_INTERVAL: "10 seconds"
-  CATALOG_TYPE: "s3tables"
----
 # Deployment for Spark application in K8s mode
 apiVersion: apps/v1
 kind: Deployment
@@ -88,7 +75,7 @@ spec:
           value: "spark"
         - name: APP_NAME
           value: "spark-stream-table-app"
-        
+
         # Spark resource configuration
         - name: SPARK_DRIVER_MEMORY
           value: "1g"
@@ -98,35 +85,11 @@ spec:
           value: "1"
         - name: SPARK_EXECUTOR_CORES
           value: "1"
-        
-        # Application configuration from ConfigMap
-        - name: TABLE_NAMESPACE
-          valueFrom:
-            configMapKeyRef:
-              name: spark-stream-config
-              key: TABLE_NAMESPACE
-        - name: TABLE_NAME
-          valueFrom:
-            configMapKeyRef:
-              name: spark-stream-config
-              key: TABLE_NAME
-        - name: CHECKPOINT_DIR
-          valueFrom:
-            configMapKeyRef:
-              name: spark-stream-config
-              key: CHECKPOINT_DIR
-        - name: TRIGGER_INTERVAL
-          valueFrom:
-            configMapKeyRef:
-              name: spark-stream-config
-              key: TRIGGER_INTERVAL
-        - name: CATALOG_TYPE
-          valueFrom:
-            configMapKeyRef:
-              name: spark-stream-config
-              key: CATALOG_TYPE
-        
-        # AWS credentials (use secrets in production)
+
+        # AWS configuration
+        - name: AWS_REGION
+          value: "us-east-1"
+        # AWS credentials (optional - use secrets in production)
         # - name: AWS_ACCESS_KEY_ID
         #   valueFrom:
         #     secretKeyRef:
@@ -137,7 +100,46 @@ spec:
         #     secretKeyRef:
         #       name: aws-credentials
         #       key: secret-access-key
-        
+        # - name: AWS_SESSION_TOKEN
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: aws-credentials
+        #       key: session-token
+
+        # Catalog configuration
+        - name: CATALOG_TYPE
+          value: "s3tables"
+        - name: S3_TABLE_BUCKET_ARN
+          value: "arn:aws:s3tables:us-east-1:123456789012:bucket/your-table-bucket"
+        # - name: S3_WAREHOUSE
+        #   value: "s3a://your-bucket/warehouse"
+
+        # Table configuration
+        - name: TABLE_NAMESPACE
+          value: "raw_data"
+        - name: TABLE_NAME
+          value: "test_table"
+
+        # Streaming configuration
+        - name: CHECKPOINT_DIR
+          value: "./checkpoints"
+        - name: TRIGGER_INTERVAL
+          value: "10 seconds"
+        - name: KEY_FIELD
+          value: ""  # Optional - leave empty for null keys
+
+        # Kafka configuration
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "bastion.ocp.tangram-soft.com:31700"
+        - name: KAFKA_OUTPUT_TOPIC
+          value: "iceberg-output-topic"
+        - name: KAFKA_SECURITY_PROTOCOL
+          value: "PLAINTEXT"
+        # - name: KAFKA_SASL_MECHANISM
+        #   value: ""  # Optional - uncomment if using SASL
+        # - name: KAFKA_SASL_JAAS_CONFIG
+        #   value: ""  # Optional - uncomment if using SASL
+
         ports:
         - containerPort: 4040
           name: spark-ui
@@ -145,7 +147,7 @@ spec:
           name: driver-port
         - containerPort: 7079
           name: block-mgr
-        
+
         resources:
           requests:
             memory: "1.5Gi"
