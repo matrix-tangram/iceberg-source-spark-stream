@@ -43,7 +43,7 @@ When no environment variables are set for serializers:
 | Component | Default Value | Source |
 |-----------|--------------|--------|
 | **Key Serializer** | `org.apache.kafka.common.serialization.StringSerializer` | `KafkaProducerHelper.parseSerializerConfig()` |
-| **Value Serializer** | `io.confluent.kafka.serializers.json.KafkaJsonSerializer` | `KafkaProducerHelper.parseSerializerConfig()` |
+| **Value Serializer** | `io.confluent.kafka.serializers.KafkaJsonSerializer` | `KafkaProducerHelper.parseSerializerConfig()` |
 | **Inline JSON Schema** | `false` (disabled) | `KAFKA_SERIALIZER_JSON_SCHEMAS_ENABLED` |
 | **Schema Registry** | Not configured | No `SCHEMA_REGISTRY_URL` set |
 

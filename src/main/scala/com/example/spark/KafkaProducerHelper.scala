@@ -112,7 +112,7 @@ object KafkaProducerHelper {
 
     val valueSerializer = envVars.getOrElse(
       "KAFKA_VALUE_SERIALIZER",
-      "io.confluent.kafka.serializers.json.KafkaJsonSerializer"
+      "io.confluent.kafka.serializers.KafkaJsonSerializer"
     )
 
     // Build additional configs

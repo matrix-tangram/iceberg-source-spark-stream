@@ -34,7 +34,7 @@ import scala.util.Try
  * - KAFKA_SASL_MECHANISM: SASL mechanism (optional, for authentication)
  * - KAFKA_SASL_JAAS_CONFIG: JAAS configuration (optional, for authentication)
  * - KAFKA_KEY_SERIALIZER: Key serializer class (default: "org.apache.kafka.common.serialization.StringSerializer")
- * - KAFKA_VALUE_SERIALIZER: Value serializer class (default: "io.confluent.kafka.serializers.json.KafkaJsonSerializer")
+ * - KAFKA_VALUE_SERIALIZER: Value serializer class (default: "io.confluent.kafka.serializers.KafkaJsonSerializer")
  * - KAFKA_SERIALIZER_JSON_SCHEMAS_ENABLED: Enable inline JSON schemas (default: "false")
  * - SCHEMA_REGISTRY_URL: Schema Registry URL (optional, for Confluent Schema Registry integration)
  * - SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO: Schema Registry auth in format "username:password" (optional)
