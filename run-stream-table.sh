@@ -64,12 +64,12 @@ export TABLE_NAME="${TABLE_NAME:-test_table}"
 export KEY_FIELD="${KEY_FIELD:-}"  # Optional: field to use as Kafka key
 # Checkpoint directory - MUST be S3 when using S3 Tables
 # Format: s3a://bucket-name/path/to/checkpoints
-export CHECKPOINT_DIR="${CHECKPOINT_DIR:-s3a://il-co-matrix-alexeyma/checkpoint/stream-table-app/dev5}"
+export CHECKPOINT_DIR="${CHECKPOINT_DIR:-s3a://il-co-matrix-alexeyma/checkpoint/stream-table-app/dev7}"
 export TRIGGER_INTERVAL="${TRIGGER_INTERVAL:-10 seconds}"
 
 # Kafka Configuration
 export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-bastion.ocp.tangram-soft.com:31700}"
-export KAFKA_OUTPUT_TOPIC="${KAFKA_OUTPUT_TOPIC:-iceberg-output1}"
+export KAFKA_OUTPUT_TOPIC="${KAFKA_OUTPUT_TOPIC:-iceberg-output-topic}"
 export KAFKA_SECURITY_PROTOCOL="${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}"
 # Optional: Uncomment and configure for authentication
 # export KAFKA_SASL_MECHANISM="${KAFKA_SASL_MECHANISM:-PLAIN}"

@@ -1,0 +1,92 @@
+---
+# Deployment for Spark streaming application
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-stream-table-app
+  namespace: default
+  labels:
+    app: spark-stream-table-app
+    component: driver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-stream-table-app
+      component: driver
+  template:
+    metadata:
+      labels:
+        app: spark-stream-table-app
+        component: driver
+    spec:
+      serviceAccountName: spark
+      containers:
+      - name: spark-driver
+        image: spark-stream-table:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        # Spark mode configuration
+        - name: SPARK_MODE
+          value: "local"
+        - name: PARALLELISM
+          value: "2"
+        - name: SPARK_MASTER_HOST
+          value: "spark-master"
+        - name: SPARK_MASTER_PORT
+          value: "7077"
+        - name: SPARK_DRIVER_PORT
+          value: "7078"
+        - name: SPARK_DRIVER_BLOCK_MANAGER_PORT
+          value: "7079"
+        - name: SPARK_UI_PORT
+          value: "4040"
+        - name: SPARK_WORKER_UI_PORT
+          value: "8081"
+        
+        # Spark resource configuration
+        - name: SPARK_DRIVER_MEMORY
+          value: "1g"
+        - name: SPARK_EXECUTOR_MEMORY
+          value: "1g"
+        - name: SPARK_DRIVER_CORES
+          value: "1"
+        - name: SPARK_EXECUTOR_CORES
+          value: "1"
+        
+        # Application configuration
+        - name: APP_CLASS
+          value: "com.example.spark.StreamTableApp"
+        - name: APP_JAR
+          value: "/opt/spark-app/jars/app.jar"
+        
+        # AWS configuration
+        - name: AWS_REGION
+          value: "eu-central-1"
+        
+        # Kafka configuration
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "bastion.ocp.tangram-soft.com:31700"
+        - name: KAFKA_OUTPUT_TOPIC
+          value: "iceberg-output-topic"
+        - name: KAFKA_SECURITY_PROTOCOL
+          value: "PLAINTEXT"
+        
+        # Table configuration
+        - name: TABLE_NAMESPACE
+          value: "raw_data"
+        - name: TABLE_NAME
+          value: "test_table"
+        - name: CHECKPOINT_DIR
+          value: "./checkpoints"
+        - name: TRIGGER_INTERVAL
+          value: "10 seconds"
+        - name: CATALOG_TYPE
+          value: "s3tables"
+        - name: S3_TABLE_BUCKET_ARN
+          value: "arn:aws:s3tables:us-east-1:123456789012:bucket/your-table-bucket"
+        
+        ports:
+        - containerPort: 4040
+          name: spark-ui
+

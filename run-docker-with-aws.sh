@@ -39,10 +39,10 @@ docker rm -f spark-local 2>/dev/null || true
 
 # Run the container
 echo -e "${YELLOW}Starting Docker container...${NC}"
-docker run -d \
+docker run \
   --name spark-local \
   -e SPARK_MODE=local \
-  -e PARALLELISM=4 \
+  -e PARALLELISM=2 \
   -e SPARK_DRIVER_MEMORY=2g \
   -e SPARK_DRIVER_CORES=2 \
   -e AWS_REGION=eu-central-1 \
@@ -53,7 +53,7 @@ docker run -d \
   -e S3_TABLE_BUCKET_ARN="arn:aws:s3tables:eu-central-1:667654397356:bucket/iceberg-warehouse1" \
   -e TABLE_NAMESPACE=raw_data \
   -e TABLE_NAME=test_table \
-  -e CHECKPOINT_DIR="s3a://conf-parq/spark-checkpoints" \
+  -e CHECKPOINT_DIR="s3a://il-co-matrix-alexeyma/checkpoint/stream-table-app/dev8" \
   -e TRIGGER_INTERVAL="10 seconds" \
   -e KAFKA_BOOTSTRAP_SERVERS=bastion.ocp.tangram-soft.com:31700 \
   -e KAFKA_OUTPUT_TOPIC=iceberg-output-topic \

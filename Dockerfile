@@ -3,9 +3,9 @@ FROM apache/spark:3.5.0-scala2.12-java11-python3-ubuntu
 # Switch to root to install packages
 USER root
 
-# Install required packages
+# Install required packages (including curl for downloading JARs)
 RUN apt-get update && \
-    apt-get install -y netcat && \
+    apt-get install -y netcat curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Set environment variables (SPARK_HOME already set in base image)
@@ -14,6 +14,24 @@ ENV SPARK_NO_DAEMONIZE=true \
 
 # Create application directory
 RUN mkdir -p /opt/spark-app/jars /opt/spark-app/conf
+
+# Download Kafka connector and its transitive dependencies at build time
+# This ensures the container is self-contained and doesn't need internet access at runtime
+RUN cd /opt/spark-app/jars && \
+    # Main Kafka connector JAR
+    curl -L -o spark-sql-kafka-0-10_2.12-3.5.0.jar \
+        https://repo1.maven.org/maven2/org/apache/spark/spark-sql-kafka-0-10_2.12/3.5.0/spark-sql-kafka-0-10_2.12-3.5.0.jar && \
+    # Kafka clients library
+    curl -L -o kafka-clients-3.4.1.jar \
+        https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.4.1/kafka-clients-3.4.1.jar && \
+    # Spark token provider for Kafka
+    curl -L -o spark-token-provider-kafka-0-10_2.12-3.5.0.jar \
+        https://repo1.maven.org/maven2/org/apache/spark/spark-token-provider-kafka-0-10_2.12/3.5.0/spark-token-provider-kafka-0-10_2.12-3.5.0.jar && \
+    # Commons Pool2 (required by Kafka clients)
+    curl -L -o commons-pool2-2.11.1.jar \
+        https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar && \
+    # Verify all JARs were downloaded successfully
+    ls -lh *.jar
 
 # Copy the application JAR
 COPY target/spark-iceberg-aws-1.0-SNAPSHOT.jar /opt/spark-app/jars/app.jar
@@ -48,7 +66,8 @@ ENV SPARK_MODE=local \
     TABLE_NAME=test_table \
     CHECKPOINT_DIR=./checkpoints \
     TRIGGER_INTERVAL="10 seconds" \
-    CATALOG_TYPE=s3tables
+    CATALOG_TYPE=s3tables \
+    AWS_JAVA_V1_DISABLE_DEPRECATION_ANNOUNCEMENT=true
 
 # Expose common Spark ports
 EXPOSE 4040 6066 7077 7078 7079 8080 8081

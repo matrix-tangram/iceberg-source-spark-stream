@@ -26,7 +26,7 @@ case "${SPARK_MODE}" in
         exec ${SPARK_HOME}/bin/spark-submit \
             --master local[${PARALLELISM}] \
             --class ${APP_CLASS} \
-            --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
+            --jars /opt/spark-app/jars/spark-sql-kafka-0-10_2.12-3.5.0.jar,/opt/spark-app/jars/kafka-clients-3.4.1.jar,/opt/spark-app/jars/spark-token-provider-kafka-0-10_2.12-3.5.0.jar,/opt/spark-app/jars/commons-pool2-2.11.1.jar \
             --driver-memory ${SPARK_DRIVER_MEMORY} \
             --driver-cores ${SPARK_DRIVER_CORES} \
             --conf spark.ui.port=${SPARK_UI_PORT} \
@@ -44,6 +44,7 @@ case "${SPARK_MODE}" in
             --deploy-mode cluster \
             --class ${APP_CLASS} \
             --name ${APP_NAME:-spark-stream-table-app} \
+            --jars /opt/spark-app/jars/spark-sql-kafka-0-10_2.12-3.5.0.jar,/opt/spark-app/jars/kafka-clients-3.4.1.jar,/opt/spark-app/jars/spark-token-provider-kafka-0-10_2.12-3.5.0.jar,/opt/spark-app/jars/commons-pool2-2.11.1.jar \
             --conf spark.executor.instances=${PARALLELISM} \
             --conf spark.kubernetes.container.image=${K8S_IMAGE:-spark-app:latest} \
             --conf spark.kubernetes.driver.pod.name=${HOSTNAME} \
@@ -69,6 +70,7 @@ case "${SPARK_MODE}" in
             --deploy-mode client \
             --class ${APP_CLASS} \
             --name ${APP_NAME:-spark-stream-table-app} \
+            --jars /opt/spark-app/jars/spark-sql-kafka-0-10_2.12-3.5.0.jar,/opt/spark-app/jars/kafka-clients-3.4.1.jar,/opt/spark-app/jars/spark-token-provider-kafka-0-10_2.12-3.5.0.jar,/opt/spark-app/jars/commons-pool2-2.11.1.jar \
             --conf spark.executor.instances=${PARALLELISM} \
             --conf spark.kubernetes.container.image=${K8S_IMAGE:-spark-app:latest} \
             --conf spark.kubernetes.namespace=${K8S_NAMESPACE:-default} \
